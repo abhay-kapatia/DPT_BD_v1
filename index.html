@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flappin' Through It</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0d0d1f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: 'Press Start 2P', monospace;
+    touch-action: manipulation;
+  }
+
+  #gameContainer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    max-width: 480px;
+    max-height: 900px;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  /* HUD overlays */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #scoreDisplay {
+    text-align: center;
+    padding-top: 18px;
+    font-size: clamp(20px, 6vw, 36px);
+    color: #fff;
+    text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  }
+
+  #immunityBar {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    height: 8px;
+    background: rgba(0,0,0,0.4);
+    border: 2px solid #fff;
+    border-radius: 4px;
+    display: none;
+    overflow: hidden;
+  }
+  #immunityFill {
+    height: 100%;
+    background: linear-gradient(90deg, #f59e0b, #f97316);
+    width: 100%;
+    transition: width 0.1s linear;
+    border-radius: 2px;
+  }
+
+  /* Screen overlays */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: rgba(10, 10, 30, 0.85);
+    backdrop-filter: blur(4px);
+  }
+  .screen h1 {
+    font-size: clamp(18px, 5vw, 28px);
+    color: #4ade80;
+    text-shadow: 0 0 20px #4ade80aa;
+    margin-bottom: 20px;
+    text-align: center;
+    line-height: 1.8;
+  }
+  .screen p {
+    font-size: clamp(8px, 2.5vw, 12px);
+    color: #cbd5e1;
+    text-align: center;
+    line-height: 2;
+    margin-bottom: 30px;
+    padding: 0 20px;
+  }
+  .btn {
+    background: #4ade80;
+    color: #0a0a1a;
+    border: none;
+    padding: 14px 32px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(10px, 3vw, 14px);
+    cursor: pointer;
+    border-radius: 4px;
+    box-shadow: 0 4px 0 #16a34a;
+    transition: all 0.1s;
+    margin: 8px;
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #16a34a; }
+
+  #startScreen { display: flex; }
+  #gameOverScreen { display: none; }
+
+  #finalScore {
+    font-size: clamp(12px, 4vw, 20px);
+    color: #fbbf24;
+    margin: 10px 0 20px;
+  }
+
+  /* Game Over Custom Popup */
+  #koinaPopup {
+    background: #1e293b;
+    border: 4px solid #ef4444;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    transform: scale(0.9);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+  @keyframes popIn {
+    to { transform: scale(1); }
+  }
+  #koinaImg {
+    max-width: 150px;
+    max-height: 150px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: none; /* Hidden until an image URL is provided */
+    object-fit: cover;
+  }
+  #koinaText {
+    font-family: 'Caveat', cursive, sans-serif;
+    font-size: 28px;
+    color: #fca5a5;
+    text-align: center;
+    font-weight: bold;
+    transform: rotate(-3deg);
+  }
+
+  /* Polaroid popup */
+  #polaroidOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .polaroid {
+    background: #fffdf5;
+    padding: 14px 14px 50px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,0,0,0.1);
+    transform: rotate(-5deg) scale(0) translateY(60px);
+    opacity: 0;
+    transition: none;
+    max-width: 220px;
+    width: 80%;
+  }
+  .polaroid.show {
+    animation: polaroidIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+  .polaroid.hide {
+    animation: polaroidOut 0.4s ease-in forwards;
+  }
+  @keyframes polaroidIn {
+    0% { transform: rotate(-8deg) scale(0) translateY(80px); opacity: 0; }
+    60% { transform: rotate(3deg) scale(1.05) translateY(-5px); opacity: 1; }
+    100% { transform: rotate(-4deg) scale(1) translateY(0); opacity: 1; }
+  }
+  @keyframes polaroidOut {
+    0% { transform: rotate(-4deg) scale(1) translateY(0); opacity: 1; }
+    100% { transform: rotate(10deg) scale(0.3) translateY(-60px); opacity: 0; }
+  }
+
+  .polaroid-img-wrap {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #e2e8f0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .polaroid-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .polaroid-placeholder {
+    font-size: 40px;
+    line-height: 1;
+  }
+  .polaroid-msg {
+    font-family: 'Caveat', cursive, 'Press Start 2P', monospace;
+    font-size: 13px;
+    color: #1e293b;
+    text-align: center;
+    position: absolute;
+    bottom: 10px;
+    left: 0; right: 0;
+    padding: 0 8px;
+    font-style: italic;
+  }
+
+  /* Powerup slot indicators */
+  #powerupSlots {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    pointer-events: none;
+    z-index: 11;
+  }
+  .slot {
+    width: 48px;
+    height: 48px;
+    border: 3px solid rgba(255,255,255,0.4);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .slot img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    display: none;
+  }
+  .slot .slot-emoji {
+    font-size: 22px;
+    display: none;
+  }
+  .slot.active { border-color: #f59e0b; box-shadow: 0 0 12px #f59e0baa; }
+  .slot-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #94a3b8;
+    text-align: center;
+    margin-top: -8px;
+  }
+
+  /* immunity flash effect */
+  #immunityFlash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    border: 0px solid transparent;
+    transition: border-width 0.1s;
+  }
+  #immunityFlash.active {
+    border: 6px solid #f59e0b;
+    box-shadow: inset 0 0 30px #f59e0b44;
+    animation: flashPulse 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes flashPulse {
+    from { border-color: #f59e0b88; }
+    to { border-color: #f97316cc; }
+  }
+
+  /* +Score pop */
+  .scorePopup {
+    position: absolute;
+    pointer-events: none;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: #fbbf24;
+    text-shadow: 2px 2px 0 #000;
+    z-index: 25;
+    animation: scoreFloat 1s ease-out forwards;
+  }
+  @keyframes scoreFloat {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-60px); opacity: 0; }
+  }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="gameContainer">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="immunityFlash"></div>
+
+  <div id="hud">
+    <div id="scoreDisplay">0</div>
+    <div id="immunityBar"><div id="immunityFill"></div></div>
+  </div>
+
+  <div id="powerupSlots">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div class="slot" id="slot0">
+        <img id="slot0img" src="" alt="">
+        <span class="slot-emoji" id="slot0emoji">⭐</span>
+      </div>
+      <span class="slot-label">PWR-UP</span>
+    </div>
+  </div>
+
+  <div id="polaroidOverlay">
+    <div class="polaroid" id="polaroid">
+      <div class="polaroid-img-wrap">
+        <img id="polaroidImg" src="" alt="" style="display:none">
+        <span class="polaroid-placeholder" id="polaroidEmoji">⭐</span>
+      </div>
+      <div class="polaroid-msg" id="polaroidMsg">You're amazing!</div>
+    </div>
+  </div>
+
+  <div class="screen" id="startScreen">
+    <h1>FLAPPIN'<br>THROUGH IT</h1>
+    <p>Tap or press SPACE to flap!<br>Collect power-ups for immunity!</p>
+    <button class="btn" id="startBtn">▶ START GAME</button>
+  </div>
+
+  <div class="screen" id="gameOverScreen">
+    <div id="koinaPopup">
+      <img id="koinaImg" src="" alt="Awwww Koina">
+      <div id="koinaText">AWWWW koina!</div>
+    </div>
+    
+    <p>SCORE</p>
+    <div id="finalScore">0</div>
+    <p id="highScoreText"></p>
+    <div style="display: flex; gap: 10px; margin-top: 10px;">
+      <button class="btn" id="restartBtn">↺ RETRY</button>
+      <button class="btn" id="menuBtn" style="background:#334155;color:#fff;box-shadow:0 4px 0 #1e293b;">MENU</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIGURATION: ADD YOUR IMAGE URLS HERE ───────────────────
+const CONFIG = {
+  // Main player character image
+  playerImage: "assets/player.jpeg", 
+
+  // Power-up item image
+  powerupImage: "assets/powerup.png", 
+
+  // Array of polaroid images to randomly cycle through
+  polaroidImages: [
+    "assets/p1.jpeg",
+    "assets/p2.jpeg",
+    "assets/p3.jpeg"
+  ],
+
+  // Game over "AWWWW koina!" image
+  gameOverImage: "assets/p2.jpeg" 
+};
+
+// ─── IMAGE STORE & PRELOADER ───────────────────────────────────
+const images = {
+  player: new Image(),
+  powerup: new Image(),
+  polaroids: [],
+  gameOver: new Image()
+};
+
+let hasPlayer = false;
+let hasPowerup = false;
+let hasGameOver = false;
+
+if (CONFIG.playerImage) {
+  images.player.onload = () => hasPlayer = true;
+  images.player.src = CONFIG.playerImage;
+}
+if (CONFIG.powerupImage) {
+  images.powerup.onload = () => hasPowerup = true;
+  images.powerup.src = CONFIG.powerupImage;
+}
+if (CONFIG.gameOverImage) {
+  images.gameOver.onload = () => {
+    hasGameOver = true;
+    const koinaImg = document.getElementById('koinaImg');
+    koinaImg.src = images.gameOver.src;
+    koinaImg.style.display = 'block';
+  };
+  images.gameOver.src = CONFIG.gameOverImage;
+}
+
+// Load polaroids
+CONFIG.polaroidImages.forEach(url => {
+  if (url.trim() !== "") {
+    let img = new Image();
+    img.src = url;
+    images.polaroids.push(img);
+  }
+});
+
+// ─── CANVAS SETUP ──────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('gameContainer');
+
+function resize() {
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); if (gameState === 'playing') resetPipes(); });
+
+// ─── GAME STATE ────────────────────────────────────────────────
+let gameState = 'menu'; // menu | playing | dead
+let score = 0;
+let highScore = 0;
+let frame = 0;
+
+// Player
+let player = {
+  x: 0, y: 0,
+  w: 44, h: 44,
+  vy: 0,
+  gravity: 0.40,
+  flapForce: -7.0,
+  immune: false,
+  immuneTimer: 0,
+  immuneDuration: 300, // frames (5s at 60fps)
+  rotation: 0
+};
+
+// Pipes
+let pipes = [];
+let pipeW = 60;
+let pipeGap = 300;
+let pipeSpeed = 3;
+let pipeInterval = 200; // frames
+let pipeTimer = 0;
+
+// Power-ups
+let powerups = [];
+let powerupTimer = 0;
+let powerupInterval = 150;
+
+// Background elements
+let stars = [];
+let clouds = [];
+let groundX = 0;
+
+// Messages for polaroid
+const polaroidMessages = [
+  "You're unstoppable! ⚡",
+  "Keep soaring higher! 🚀",
+  "Absolute legend! 🏆",
+  "Nothing can stop you! 💪",
+  "You're on fire! 🔥",
+  "Pure magic! ✨",
+  "Born to fly! 🦋",
+  "Beyond limits! 🌟",
+  "Crushing it! 💥",
+  "The sky is yours! 🌈"
+];
+
+// ─── INIT ──────────────────────────────────────────────────────
+function initStars() {
+  stars = [];
+  for (let i = 0; i < 80; i++) {
+    stars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height * 0.7,
+      r: Math.random() * 1.5 + 0.3,
+      twinkle: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+function initClouds() {
+  clouds = [];
+  for (let i = 0; i < 5; i++) {
+    clouds.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height * 0.3 + Math.random() * canvas.height * 0.3,
+      w: 80 + Math.random() * 80,
+      speed: 0.3 + Math.random() * 0.3,
+      alpha: 0.15 + Math.random() * 0.15
+    });
+  }
+}
+
+function safeMinInterval() {
+  return Math.ceil((canvas.width + pipeW + 150) / pipeSpeed);
+}
+
+function startGame() {
+  score = 0;
+  frame = 0;
+  pipes = [];
+  powerups = [];
+  pipeTimer = 0;
+  powerupTimer = 0;
+  groundX = 0;
+  pipeSpeed = 2.8;
+  pipeInterval = safeMinInterval();
+
+  const firstPipeX = canvas.width * 0.75;
+  const firstTopH = canvas.height * 0.22;
+  pipes.push({ x: firstPipeX, topH: firstTopH, scored: false });
+
+  player.x = canvas.width * 0.22;
+  player.y = firstTopH + pipeGap / 2;
+  player.vy = 0;
+  player.immune = false;
+  player.immuneTimer = 0;
+  player.rotation = 0;
+
+  pipeTimer = 0;
+
+  initStars();
+  initClouds();
+
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('scoreDisplay').textContent = '0';
+  document.getElementById('immunityBar').style.display = 'none';
+  document.getElementById('immunityFlash').classList.remove('active');
+
+  gameState = 'playing';
+  requestAnimationFrame(loop);
+}
+
+function resetPipes() {
+  pipes = [];
+  pipeTimer = 0;
+  pipeInterval = safeMinInterval();
+}
+
+// ─── INPUT ─────────────────────────────────────────────────────
+function flap() {
+  if (gameState === 'playing') {
+    player.vy = player.flapForce;
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    flap();
+  }
+});
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); flap(); }, { passive: false });
+canvas.addEventListener('mousedown', (e) => { if (gameState === 'playing') flap(); });
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+document.getElementById('menuBtn').addEventListener('click', () => {
+  document.getElementById('gameOverScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+  gameState = 'menu';
+});
+
+// ─── PIPES ─────────────────────────────────────────────────────
+function spawnPipe() {
+  const groundH = Math.floor(canvas.height * 0.12);
+  const minTop = 50;
+  const maxTop = canvas.height - groundH - pipeGap - minTop;
+  const topH = minTop + Math.random() * (maxTop - minTop);
+  pipes.push({
+    x: canvas.width + pipeW,
+    topH,
+    scored: false
+  });
+}
+
+function updatePipes() {
+  pipeTimer++;
+  if (pipeTimer >= pipeInterval) {
+    spawnPipe();
+    pipeTimer = 0;
+  }
+  for (let p of pipes) {
+    p.x -= pipeSpeed;
+    if (!p.scored && p.x + pipeW < player.x) {
+      p.scored = true;
+      score++;
+      document.getElementById('scoreDisplay').textContent = score;
+      spawnScorePopup(player.x, player.y - 30, '+1');
+      pipeSpeed = 2.8 + score * 0.04;
+      pipeInterval = Math.max(safeMinInterval(), 260 - score * 1.5);
+    }
+  }
+  pipes = pipes.filter(p => p.x > -pipeW - 20);
+}
+
+// ─── POWER-UPS ─────────────────────────────────────────────────
+function spawnPowerup() {
+  const groundH = canvas.height * 0.12;
+  const y = 60 + Math.random() * (canvas.height - groundH - 120);
+  powerups.push({ x: canvas.width + 30, y, w: 40, h: 40, bobOffset: Math.random() * Math.PI * 2 });
+}
+
+function updatePowerups() {
+  powerupTimer++;
+  if (powerupTimer >= powerupInterval) {
+    spawnPowerup();
+    powerupTimer = 0;
+    powerupInterval = 150 + Math.random() * 100;
+  }
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    const p = powerups[i];
+    p.x -= pipeSpeed;
+
+    const cx = player.x, cy = player.y;
+    const pw2 = p.w / 2;
+    if (Math.abs(cx - (p.x + pw2)) < pw2 + player.w * 0.4 &&
+        Math.abs(cy - (p.y + pw2)) < pw2 + player.h * 0.4) {
+      collectPowerup(p);
+      powerups.splice(i, 1);
+      continue;
+    }
+
+    if (p.x < -60) powerups.splice(i, 1);
+  }
+}
+
+function collectPowerup(p) {
+  player.immune = true;
+  player.immuneTimer = player.immuneDuration;
+
+  score += 5;
+  document.getElementById('scoreDisplay').textContent = score;
+  spawnScorePopup(player.x, player.y - 40, '+5 ⭐');
+
+  document.getElementById('immunityBar').style.display = 'block';
+  document.getElementById('immunityFlash').classList.add('active');
+
+  const slot = document.getElementById('slot0');
+  slot.classList.add('active');
+  const slotImg = document.getElementById('slot0img');
+  const slotEmoji = document.getElementById('slot0emoji');
+  
+  if (hasPowerup) {
+    slotImg.src = images.powerup.src;
+    slotImg.style.display = 'block';
+    slotEmoji.style.display = 'none';
+  } else {
+    slotEmoji.style.display = 'block';
+    slotImg.style.display = 'none';
+  }
+
+  showPolaroid();
+}
+
+// ─── POLAROID ──────────────────────────────────────────────────
+let polaroidTimeout = null;
+
+function showPolaroid() {
+  const polaroid = document.getElementById('polaroid');
+  const polaroidImg = document.getElementById('polaroidImg');
+  const polaroidEmoji = document.getElementById('polaroidEmoji');
+  const msg = document.getElementById('polaroidMsg');
+
+  msg.textContent = polaroidMessages[Math.floor(Math.random() * polaroidMessages.length)];
+
+  if (images.polaroids.length > 0) {
+    // Pick a random polaroid image from the array
+    const randomImage = images.polaroids[Math.floor(Math.random() * images.polaroids.length)];
+    polaroidImg.src = randomImage.src;
+    polaroidImg.style.display = 'block';
+    polaroidEmoji.style.display = 'none';
+  } else {
+    polaroidEmoji.style.display = 'block';
+    polaroidImg.style.display = 'none';
+    polaroidEmoji.textContent = ['🌟','🏆','🔥','💫','✨','🎉','💥','🚀'][Math.floor(Math.random()*8)];
+  }
+
+  polaroid.classList.remove('hide');
+  polaroid.classList.add('show');
+
+  if (polaroidTimeout) clearTimeout(polaroidTimeout);
+  polaroidTimeout = setTimeout(() => {
+    polaroid.classList.remove('show');
+    polaroid.classList.add('hide');
+    setTimeout(() => { polaroid.classList.remove('hide'); }, 500);
+  }, 2800);
+}
+
+// ─── SCORE POPUP ───────────────────────────────────────────────
+function spawnScorePopup(x, y, text) {
+  const el = document.createElement('div');
+  el.className = 'scorePopup';
+  el.textContent = text;
+  el.style.left = (x / canvas.width * 100) + '%';
+  el.style.top = (y / canvas.height * 100) + '%';
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+// ─── COLLISION ─────────────────────────────────────────────────
+function checkCollision() {
+  if (player.immune) return false;
+
+  const groundH = canvas.height * 0.12;
+  if (player.y + player.h * 0.5 > canvas.height - groundH || player.y - player.h * 0.5 < 0) return true;
+
+  const px = player.x, py = player.y;
+  const pr = player.w * 0.38;
+
+  for (let p of pipes) {
+    const left = p.x, right = p.x + pipeW;
+    if (px + pr > left && px - pr < right) {
+      if (py - pr < p.topH) return true;
+      if (py + pr > p.topH + pipeGap) return true;
+    }
+  }
+  return false;
+}
+
+// ─── DEATH ─────────────────────────────────────────────────────
+function die() {
+  gameState = 'dead';
+  if (score > highScore) highScore = score;
+
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('highScoreText').textContent = 'BEST: ' + highScore;
+  document.getElementById('gameOverScreen').style.display = 'flex';
+  document.getElementById('immunityBar').style.display = 'none';
+  document.getElementById('immunityFlash').classList.remove('active');
+
+  const slot = document.getElementById('slot0');
+  slot.classList.remove('active');
+  document.getElementById('slot0img').style.display = 'none';
+  document.getElementById('slot0emoji').style.display = 'none';
+}
+
+// ─── DRAW ──────────────────────────────────────────────────────
+function drawBackground() {
+  const W = canvas.width, H = canvas.height;
+
+  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.75);
+  sky.addColorStop(0, '#0c1b3a');
+  sky.addColorStop(0.5, '#1a3a6e');
+  sky.addColorStop(1, '#2d5ea8');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H * 0.75);
+
+  for (let s of stars) {
+    s.twinkle += 0.04;
+    ctx.globalAlpha = 0.4 + Math.sin(s.twinkle) * 0.5;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  for (let c of clouds) {
+    c.x -= c.speed;
+    if (c.x + c.w < 0) { c.x = W + c.w; c.y = H * 0.3 + Math.random() * H * 0.3; }
+    ctx.globalAlpha = c.alpha;
+    ctx.fillStyle = '#a0c4ff';
+    drawCloud(c.x, c.y, c.w);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = '#1a2540';
+  const cityH = H * 0.2;
+  const cityY = H * 0.62;
+  for (let bx = 0; bx < W; bx += 22) {
+    const bh = cityH * (0.4 + Math.sin(bx * 0.15) * 0.3 + Math.cos(bx * 0.07) * 0.3);
+    ctx.fillRect(bx, cityY - bh, 18, bh);
+  }
+
+  const treeY = H * 0.76;
+  ctx.fillStyle = '#1a4a1a';
+  ctx.fillRect(0, treeY, W, H - treeY);
+  for (let tx = -10; tx < W + 20; tx += 18) {
+    const th = 22 + Math.sin(tx * 0.4) * 8;
+    ctx.beginPath();
+    ctx.arc(tx + 9, treeY, th * 0.55, 0, Math.PI * 2);
+    ctx.fillStyle = '#22562a';
+    ctx.fill();
+  }
+
+  const groundH = Math.floor(H * 0.12);
+  const groundY = H - groundH;
+
+  ctx.fillStyle = '#3a7a3a';
+  ctx.fillRect(0, groundY, W, 14);
+
+  groundX -= pipeSpeed * 0.8;
+  if (groundX < -32) groundX += 32;
+
+  ctx.fillStyle = '#c8a87a';
+  ctx.fillRect(0, groundY + 14, W, groundH - 14);
+
+  ctx.strokeStyle = '#a08060';
+  ctx.lineWidth = 1;
+  const brickH = Math.floor((groundH - 14) / 2);
+  for (let row = 0; row < 2; row++) {
+    const offset = row % 2 === 0 ? groundX : groundX + 16;
+    for (let bx = offset; bx < W + 32; bx += 32) {
+      ctx.strokeRect(bx, groundY + 14 + row * brickH, 32, brickH);
+    }
+  }
+}
+
+function drawCloud(x, y, w) {
+  ctx.beginPath();
+  ctx.ellipse(x + w * 0.5, y, w * 0.5, w * 0.22, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + w * 0.3, y - w * 0.12, w * 0.3, w * 0.18, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + w * 0.7, y - w * 0.1, w * 0.25, w * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawPipe(p) {
+  const H = canvas.height;
+  const groundH = H * 0.12;
+  const bottomPipeY = p.topH + pipeGap;
+  const bottomPipeH = H - groundH - bottomPipeY;
+
+  drawPipeSegment(p.x, 0, pipeW, p.topH, true);
+  drawPipeSegment(p.x, bottomPipeY, pipeW, bottomPipeH, false);
+}
+
+function drawPipeSegment(x, y, w, h, isTop) {
+  if (h <= 0) return;
+  const capH = 18;
+  const capW = w + 8;
+  const capX = x - 4;
+
+  const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+  grad.addColorStop(0, '#4ade80');
+  grad.addColorStop(0.3, '#86efac');
+  grad.addColorStop(0.7, '#22c55e');
+  grad.addColorStop(1, '#16a34a');
+  ctx.fillStyle = grad;
+
+  if (isTop) {
+    ctx.fillRect(x, y, w, h - capH);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(capX, y + h - capH, capW, capH);
+    ctx.fillStyle = '#86efac';
+    ctx.fillRect(capX + 2, y + h - capH, 6, capH);
+    ctx.fillStyle = '#166534';
+    ctx.fillRect(capX, y + h - 2, capW, 2);
+    ctx.fillStyle = '#86efac';
+    ctx.fillRect(x + 4, y, 6, h - capH);
+    ctx.fillStyle = '#166534';
+    ctx.fillRect(x + w - 4, y, 4, h - capH);
+  } else {
+    ctx.fillRect(x, y + capH, w, h - capH);
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(capX, y, capW, capH);
+    ctx.fillStyle = '#86efac';
+    ctx.fillRect(capX + 2, y, 6, capH);
+    ctx.fillStyle = '#166534';
+    ctx.fillRect(capX, y, capW, 2);
+    ctx.fillStyle = '#86efac';
+    ctx.fillRect(x + 4, y + capH, 6, h - capH);
+    ctx.fillStyle = '#166534';
+    ctx.fillRect(x + w - 4, y + capH, 4, h - capH);
+  }
+
+  ctx.strokeStyle = '#166534';
+  ctx.lineWidth = 2;
+  if (isTop) {
+    ctx.strokeRect(capX, y + h - capH, capW, capH);
+  } else {
+    ctx.strokeRect(capX, y, capW, capH);
+  }
+}
+
+function drawPlayer() {
+  const px = player.x, py = player.y;
+  const w = player.w, h = player.h;
+
+  ctx.save();
+  ctx.translate(px, py);
+
+  player.rotation = Math.max(-0.5, Math.min(1.2, player.vy * 0.08));
+  ctx.rotate(player.rotation);
+
+  if (player.immune) {
+    const glow = ctx.createRadialGradient(0, 0, w * 0.3, 0, 0, w * 0.9);
+    glow.addColorStop(0, 'rgba(251, 191, 36, 0.5)');
+    glow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (hasPlayer) {
+    ctx.drawImage(images.player, -w / 2, -h / 2, w, h);
+  } else {
+    const flap = Math.sin(frame * 0.25) > 0;
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(-14, -10, 28, 20);
+    ctx.fillStyle = '#d97706';
+    if (flap) {
+      ctx.fillRect(-10, -20, 16, 12);
+    } else {
+      ctx.fillRect(-10, 8, 16, 12);
+    }
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(6, -8, 10, 8);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(10, -6, 5, 5);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(12, -6, 2, 2);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(13, -2, 10, 5);
+    ctx.fillStyle = '#fca5a5';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(4, 2, 7, 5);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+function drawPowerup(p) {
+  const size = p.w;
+  const bobY = Math.sin(frame * 0.06 + p.bobOffset) * 6;
+  const cx = p.x + size / 2, cy = p.y + size / 2 + bobY;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, size);
+  glow.addColorStop(0, 'rgba(251, 191, 36, 0.7)');
+  glow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(0, 0, size, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.65, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (hasPowerup) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(images.powerup, -size * 0.5, -size * 0.5, size, size);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#fbbf24';
+    drawStar(ctx, 0, 0, 5, size * 0.5, size * 0.23);
+    ctx.fill();
+    ctx.fillStyle = '#fef3c7';
+    drawStar(ctx, 0, 0, 5, size * 0.32, size * 0.14);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawStar(ctx, cx, cy, spikes, outerR, innerR) {
+  let rot = (Math.PI / 2) * 3;
+  const step = Math.PI / spikes;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - outerR);
+  for (let i = 0; i < spikes; i++) {
+    ctx.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+    rot += step;
+    ctx.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+    rot += step;
+  }
+  ctx.lineTo(cx, cy - outerR);
+  ctx.closePath();
+}
+
+// ─── UPDATE ────────────────────────────────────────────────────
+function update() {
+  frame++;
+
+  player.vy += player.gravity;
+  player.vy = Math.min(player.vy, 8);
+  player.y += player.vy;
+
+  if (player.immune) {
+    player.immuneTimer--;
+    const pct = (player.immuneTimer / player.immuneDuration) * 100;
+    document.getElementById('immunityFill').style.width = pct + '%';
+    if (player.immuneTimer <= 0) {
+      player.immune = false;
+      document.getElementById('immunityBar').style.display = 'none';
+      document.getElementById('immunityFlash').classList.remove('active');
+      const slot = document.getElementById('slot0');
+      slot.classList.remove('active');
+      document.getElementById('slot0img').style.display = 'none';
+      document.getElementById('slot0emoji').style.display = 'none';
+    }
+  }
+
+  updatePipes();
+  updatePowerups();
+
+  if (checkCollision()) {
+    die();
+    return;
+  }
+}
+
+// ─── MAIN LOOP ─────────────────────────────────────────────────
+function loop() {
+  if (gameState !== 'playing') return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+  for (let p of pipes) drawPipe(p);
+  for (let p of powerups) drawPowerup(p);
+  drawPlayer();
+  update();
+
+  requestAnimationFrame(loop);
+}
+
+// ─── MENU ANIMATION ────────────────────────────────────────────
+function menuLoop() {
+  if (gameState !== 'menu') return;
+  frame++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  groundX -= 1.5;
+  if (groundX < -32) groundX += 32;
+  if (stars.length === 0) initStars();
+  if (clouds.length === 0) initClouds();
+  drawBackground();
+  requestAnimationFrame(menuLoop);
+}
+
+initStars();
+initClouds();
+menuLoop();
+</script>
+</body>
+</html>
